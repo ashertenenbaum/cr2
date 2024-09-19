@@ -89,6 +89,9 @@
             font-weight: bold;
             cursor: pointer;
         }
+        .piece {
+            transition: all 0.5s ease;
+        }
     </style>
 </head>
 <body>
@@ -152,7 +155,7 @@
                     if (piece) {
                         const pieceElement = document.createElement('div');
                         pieceElement.innerHTML = PIECES[piece[1]][piece[0]];
-                        pieceElement.className = piece[0] === 'w' ? 'white-piece' : 'black-piece';
+                        pieceElement.className = `piece ${piece[0] === 'w' ? 'white-piece' : 'black-piece'}`;
                         pieceElement.draggable = true;
                         pieceElement.addEventListener('dragstart', dragStart);
                         pieceElement.addEventListener('dragend', dragEnd);
@@ -297,9 +300,24 @@
                 const piece = initialBoard[fromY][fromX];
                 initialBoard[fromY][fromX] = '';
                 initialBoard[toY][toX] = piece;
-                drawBoard();
-                currentPlayer = 'w';
-                updateTurnIndicator();
+                
+                // Animate the AI move
+                const fromSquare = document.getElementById(`${fromX},${fromY}`);
+                const toSquare = document.getElementById(`${toX},${toY}`);
+                const pieceElement = fromSquare.querySelector('.piece');
+                
+                if (pieceElement) {
+                    const xDiff = (toX - fromX) * 60; // 60px is the width of a square
+                    const yDiff = (toY - fromY) * 60; // 60px is the height of a square
+                    
+                    pieceElement.style.transform = `translate(${xDiff}px, ${yDiff}px)`;
+                    
+                    setTimeout(() => {
+                        drawBoard();
+                        currentPlayer = 'w';
+                        updateTurnIndicator();
+                    }, 500); // This should match the transition duration in CSS
+                }
             }
         }
 
