@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Reimagined</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        #chessboard {
+            width: 300px;
+            height: 360px;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+        }
+        .square {
+            width: 60px;
+            height: 60px;
+            float: left;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            cursor: pointer;
+        }
+        .white {
+            background-color: #f0d9b5;
+        }
+        .black {
+            background-color: #b58863;
+        }
+        .white-piece {
+            color: blue;
+        }
+        .black-piece {
+            color: red;
+        }
+        .valid-move {
+            box-shadow: inset 0 0 5px 5px rgba(0, 255, 0, 0.5);
+        }
+        #turn-indicator {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #rules-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #rules-modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chess Reimagined</h1>
+    <div id="chessboard"></div>
+    <div id="turn-indicator"></div>
+    <button id="rules-button">Show Rules</button>
+
+    <div id="rules-modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Game Rules</h2>
+            <ul>
+                <li>🦁 🐯 Sphinx: Moves 1 square forward, backward, left, and right</li>
+                <li>🐎 🦄 Centaur: Jumps forward, backward, left, and right 2 squares (can jump over other pieces)</li>
+                <li>❄️ 🌋 Yeti: Can move diagonally up to 2 squares</li>
+                <li>🍄 🍁 Gnome: Can move any direction diagonally one square</li>
+                <li>All Pieces Take Other Pieces By Moving Onto Them</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const board = document.getElementById('chessboard');
+        let currentPlayer = 'w';
+        let draggedPiece = null;
+        let validMoves = [];
+
+        const BOARD_SIZE = { width: 5, height: 6 };
+        const PIECES = {
+            'C': { w: '🐎', b: '🦄' },
+            'Y': { w: '❄️', b: '🌋' },
+            'S': { w: '🦁', b: '🐯' },
+            'G': { w: '🍄', b: '🍁' },
+        };
+
+        const initialBoard = [
+            ['bC', 'bY', 'bS', 'bY', 'bC'],
+            ['', 'bG', 'bG', 'bG', ''],
+            ['', '', '', '', ''],
+            ['', '', '', '', ''],
+            ['', 'wG', 'wG', 'wG', ''],
+            ['wC', 'wY', 'wS', 'wY', 'wC'],
+        ];
+
+        const PIECE_VALUES = {
+            'S': 5,
+            'C': 4,
+            'Y': 3,
+            'G': 1
+        };
+
+        function drawBoard() {
+            board.innerHTML = '';
+            for (let y = 0; y < BOARD_SIZE.height; y++) {
+                for (let x = 0; x < BOARD_SIZE.width; x++) {
+                    const square = document.createElement('div');
+                    square.id = `${x},${y}`;
+                    square.className = `square ${(x + y) % 2 === 0 ? 'white' : 'black'}`;
+                    const piece = initialBoard[y][x];
+                    if (piece) {
+                        const pieceElement = document.createElement('div');
+                        pieceElement.innerHTML = PIECES[piece[1]][piece[0]];
+                        pieceElement.className = piece[0] === 'w' ? 'white-piece' : 'black-piece';
+                        pieceElement.draggable = true;
+                        pieceElement.addEventListener('dragstart', dragStart);
+                        pieceElement.addEventListener('dragend', dragEnd);
+                        square.appendChild(pieceElement);
+                    }
+                    square.addEventListener('dragover', dragOver);
+                    square.addEventListener('drop', drop);
+                    board.appendChild(square);
+                }
+            }
+        }
+
+        function dragStart(e) {
+            if (currentPlayer === 'w' && e.target.className.includes('white-piece')) {
+                draggedPiece = e.target;
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+                const [x, y] = e.target.parentNode.id.split(',').map(Number);
+                validMoves = getValidMoves(x, y, initialBoard[y][x]);
+                highlightValidMoves(validMoves);
+            } else {
+                e.preventDefault();
+            }
+        }
+
+        function dragEnd(e) {
+            e.target.classList.remove('dragging');
+            clearHighlights();
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            if (draggedPiece) {
+                const [fromX, fromY] = draggedPiece.parentNode.id.split(',').map(Number);
+                const toSquare = e.target.closest('.square');
+                if (!toSquare) return;
+                const [toX, toY] = toSquare.id.split(',').map(Number);
+                const move = validMoves.find(m => m[0] === toX && m[1] === toY);
+                if (move) {
+                    const piece = initialBoard[fromY][fromX];
+                    initialBoard[fromY][fromX] = '';
+                    initialBoard[toY][toX] = piece;
+                    drawBoard();
+                    currentPlayer = 'b';
+                    updateTurnIndicator();
+                    setTimeout(makeAIMove, 500);
+                }
+            }
+            clearHighlights();
+        }
+
+        function getValidMoves(x, y, piece) {
+            const moves = [];
+            const type = piece[1];
+            const color = piece[0];
+
+            switch (type) {
+                case 'S':
+                    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+                        const newX = x + dx;
+                        const newY = y + dy;
+                        if (isValidMove(newX, newY, color)) moves.push([newX, newY]);
+                    }
+                    break;
+                case 'C':
+                    for (const [dx, dy] of [[0, 2], [0, -2], [2, 0], [-2, 0]]) {
+                        const newX = x + dx;
+                        const newY = y + dy;
+                        if (isValidMove(newX, newY, color)) moves.push([newX, newY]);
+                    }
+                    break;
+                case 'Y':
+                    for (let i = 1; i <= 2; i++) {
+                        for (const [dx, dy] of [[i, i], [i, -i], [-i, i], [-i, -i]]) {
+                            const newX = x + dx;
+                            const newY = y + dy;
+                            if (isValidMove(newX, newY, color)) {
+                                moves.push([newX, newY]);
+                            }
+                        }
+                    }
+                    break;
+                case 'G':
+                    for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+                        const newX = x + dx;
+                        const newY = y + dy;
+                        if (isValidMove(newX, newY, color)) moves.push([newX, newY]);
+                    }
+                    break;
+            }
+            return moves;
+        }
+
+        function isValidMove(x, y, color) {
+            if (x < 0 || x >= BOARD_SIZE.width || y < 0 || y >= BOARD_SIZE.height) return false;
+            const targetSquare = initialBoard[y][x];
+            return !targetSquare || targetSquare[0] !== color;
+        }
+
+        function highlightValidMoves(moves) {
+            moves.forEach(([x, y]) => {
+                const square = document.getElementById(`${x},${y}`);
+                square.classList.add('valid-move');
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(square => square.classList.remove('valid-move'));
+        }
+
+        function makeAIMove() {
+            currentPlayer = 'w';
+            updateTurnIndicator();
+        }
+
+        function updateTurnIndicator() {
+            document.getElementById('turn-indicator').textContent = currentPlayer === 'w' ? "Your move" : "AI is thinking...";
+        }
+
+        document.getElementById('rules-button').addEventListener('click', () => {
+            document.getElementById('rules-modal').style.display = 'block';
+        });
+
+        document.querySelector('.close').addEventListener('click', () => {
+            document.getElementById('rules-modal').style.display = 'none';
+        });
+
+        window.onclick = function (event) {
+            if (event.target === document.getElementById('rules-modal')) {
+                document.getElementById('rules-modal').style.display = 'none';
+            }
+        }
+
+        drawBoard();
+        updateTurnIndicator();
+    </script>
+</body>
+</html>
