@@ -119,10 +119,10 @@
 
         const BOARD_SIZE = { width: 5, height: 6 };
         const PIECES = {
-            'C': { w: '🐎', b: '🦄' },
-            'Y': { w: '❄️', b: '🌋' },
-            'S': { w: '🦁', b: '🐯' },
-            'G': { w: '🍄', b: '🍁' },
+            'C': { w: '🐎', b: '🦄' }, // Centaur
+            'Y': { w: '❄️', b: '🌋' }, // Yeti
+            'S': { w: '🦁', b: '🐯' }, // Sphinx
+            'G': { w: '🍄', b: '🍁' }, // Gnome
         };
 
         const initialBoard = [
@@ -135,10 +135,10 @@
         ];
 
         const PIECE_VALUES = {
-            'S': 5,
-            'C': 4,
-            'Y': 3,
-            'G': 1
+            'S': 5,  // Sphinx
+            'C': 4,  // Centaur
+            'Y': 3,  // Yeti
+            'G': 1   // Gnome
         };
 
         function drawBoard() {
@@ -213,21 +213,21 @@
             const color = piece[0];
 
             switch (type) {
-                case 'S':
+                case 'S': // Sphinx
                     for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
                         const newX = x + dx;
                         const newY = y + dy;
                         if (isValidMove(newX, newY, color)) moves.push([newX, newY]);
                     }
                     break;
-                case 'C':
+                case 'C': // Centaur
                     for (const [dx, dy] of [[0, 2], [0, -2], [2, 0], [-2, 0]]) {
                         const newX = x + dx;
                         const newY = y + dy;
                         if (isValidMove(newX, newY, color)) moves.push([newX, newY]);
                     }
                     break;
-                case 'Y':
+                case 'Y': // Yeti (snowflake)
                     for (let i = 1; i <= 2; i++) {
                         for (const [dx, dy] of [[i, i], [i, -i], [-i, i], [-i, -i]]) {
                             const newX = x + dx;
@@ -238,7 +238,7 @@
                         }
                     }
                     break;
-                case 'G':
+                case 'G': // Gnome
                     for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
                         const newX = x + dx;
                         const newY = y + dy;
@@ -246,46 +246,103 @@
                     }
                     break;
             }
+
             return moves;
         }
 
         function isValidMove(x, y, color) {
-            if (x < 0 || x >= BOARD_SIZE.width || y < 0 || y >= BOARD_SIZE.height) return false;
-            const targetSquare = initialBoard[y][x];
-            return !targetSquare || targetSquare[0] !== color;
+            if (x < 0 || x >= BOARD_SIZE.width || y < 0 || y >= BOARD_SIZE.height) {
+                return false;
+            }
+            return !initialBoard[y][x] || initialBoard[y][x][0] !== color;
         }
 
         function highlightValidMoves(moves) {
             moves.forEach(([x, y]) => {
                 const square = document.getElementById(`${x},${y}`);
-                square.classList.add('valid-move');
+                if (square) {
+                    square.classList.add('valid-move');
+                }
             });
         }
 
         function clearHighlights() {
-            document.querySelectorAll('.square').forEach(square => square.classList.remove('valid-move'));
+            const squares = document.querySelectorAll('.square');
+            squares.forEach(square => square.classList.remove('valid-move'));
         }
 
         function makeAIMove() {
-            currentPlayer = 'w';
-            updateTurnIndicator();
+            const aiColor = currentPlayer;
+            let bestMove = null;
+            let bestScore = -Infinity;
+
+            for (let y = 0; y < BOARD_SIZE.height; y++) {
+                for (let x = 0; x < BOARD_SIZE.width; x++) {
+                    const piece = initialBoard[y][x];
+                    if (piece && piece[0] === aiColor) {
+                        const moves = getValidMoves(x, y, piece);
+                        for (const [toX, toY] of moves) {
+                            const score = evaluateMove(x, y, toX, toY, piece);
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMove = { fromX: x, fromY: y, toX, toY };
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bestMove) {
+                const { fromX, fromY, toX, toY } = bestMove;
+                const piece = initialBoard[fromY][fromX];
+                initialBoard[fromY][fromX] = '';
+                initialBoard[toY][toX] = piece;
+                drawBoard();
+                currentPlayer = 'w';
+                updateTurnIndicator();
+            }
+        }
+
+        function evaluateMove(fromX, fromY, toX, toY, piece) {
+            let score = 0;
+
+            // Prioritize captures
+            if (initialBoard[toY][toX]) {
+                score += PIECE_VALUES[initialBoard[toY][toX][1]] * 10;
+            }
+
+            // Prioritize center control
+            const centerX = Math.floor(BOARD_SIZE.width / 2);
+            const centerY = Math.floor(BOARD_SIZE.height / 2);
+            score += 5 - (Math.abs(toX - centerX) + Math.abs(toY - centerY));
+
+            // Add some randomness to avoid predictability
+            score += Math.random() * 2;
+
+            return score;
         }
 
         function updateTurnIndicator() {
-            document.getElementById('turn-indicator').textContent = currentPlayer === 'w' ? "Your move" : "AI is thinking...";
+            const indicator = document.getElementById('turn-indicator');
+            indicator.textContent = currentPlayer === 'w' ? "Your Turn" : "AI's Turn";
         }
 
-        document.getElementById('rules-button').addEventListener('click', () => {
-            document.getElementById('rules-modal').style.display = 'block';
-        });
+        // Rules modal functionality
+        const rulesButton = document.getElementById("rules-button");
+        const rulesModal = document.getElementById("rules-modal");
+        const closeButton = document.getElementsByClassName("close")[0];
 
-        document.querySelector('.close').addEventListener('click', () => {
-            document.getElementById('rules-modal').style.display = 'none';
-        });
+        rulesButton.onclick = function() {
+            rulesModal.style.display = "block";
+        }
 
-        window.onclick = function (event) {
-            if (event.target === document.getElementById('rules-modal')) {
-                document.getElementById('rules-modal').style.display = 'none';
+        closeButton.onclick = function() {
+            rulesModal.style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == rulesModal) {
+                rulesModal.style.display = "none";
             }
         }
 
